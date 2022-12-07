@@ -1,0 +1,43 @@
+name: Wait for commit status
+description: Waits till a commit status changes to success
+
+inputs:
+  status_context:
+    description: "Name of the commit status to wait for"
+    required: true
+  poll_interval:
+    description: "Seconds to wait between polling for commit status"
+    required: false
+    default: 30
+runs:
+  using: composite
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            const waitingForStatus = setInterval(
+              async function() {
+                commitStatuses = await github.rest.repos.listCommitStatusesForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: context.sha
+                });
+
+                let commitStatus = commitStatuses.data.filter(
+                  (status) => status.context == "${{ inputs.status_context }}"
+                )[0];
+
+                if (commitStatus === undefined) {
+                  console.log("status not available, retrying in ${{ inputs.poll_interval }}s.");
+                  return;
+                }
+
+                if (commitStatus.state == "success") {
+                  console.log("success!");
+                  clearInterval(waitingForStatus);
+                }
+
+                console.log("status: " + commitStatus.state + ", retrying in ${{ inputs.poll_interval }}s.");
+              },
+              ${{ inputs.poll_interval * 1000 }}
+            );
